@@ -5,6 +5,7 @@ import pprint
 import hashlib
 import base64
 import datetime
+import argparse
 
 import pytz
 import yaml
@@ -12,7 +13,8 @@ from markdownify import markdownify
 
 __folder__ = os.path.dirname(__file__)
 
-TZ_LOCAL = pytz.timezone("America/Halifax")
+TZ = "America/Halifax"
+TZ_LOCAL = pytz.timezone(TZ)
 TZ_UTC = pytz.timezone("UTC")
 
 def normalize_date(s_local, eod=False):
@@ -56,19 +58,23 @@ def scrub_content(text):
     return text
 
 class Processor:
-    def __init__(self):
+    def __init__(self, n=None):
         self.folder = os.path.join(__folder__, "pyd")
         self.dorder = []
         self.d = {}
+        self.n = n
 
     def run(self):
         with open(os.path.join(self.folder, "pei.search.events.pyd")) as fin:
             records = eval(fin.read())
 
+        if self.n is not None:
+            records = records[:self.n]
+
         for record in records:
             self.cook_one(record)
 
-        yaml.dump([ self.d[client_id] for client_id in self.dorder ], sys.stdout)
+        yaml.dump([ self.d[identifier] for identifier in self.dorder ], sys.stdout)
 
     def cook_one(self, record):
         record_id = record["id"]
@@ -77,18 +83,18 @@ class Processor:
         for photo in record.get("photos", []):
             image = {
                 "type": "Image",
-                "client_id": hash(photo),
+                "identifier": hash(photo),
                 "url": photo,
             }
             self.add(image)
             images.append({
                 "type": "Image",
-                "client_id": image["client_id"],
+                "identifier": image["identifier"],
             })
 
         item = {
             "type": "Item",
-            "client_id": hash(f"item-{record_id}"),
+            "identifier": hash(f"item-{record_id}"),
             "name": record.get("title"),
             "description": scrub_content(record.get("content")),
             "url": record.get("url"),
@@ -100,7 +106,7 @@ class Processor:
 
         location = {
             "type": "Location",
-            "client_id": hash(f"location-{record_id}"),
+            "identifier": hash(f"location-{record_id}"),
             "street": record.get("street_address"),
             "locality": record.get("locality"),
             "region": record.get("region_state"),
@@ -114,32 +120,37 @@ class Processor:
         event_end = normalize_date(record.get("event_end"), eod=True)
         offer = {
             "type": "Offer",
-            "client_id": hash(f"offer-{record_id}-{event_start}-{event_end}"),
+            "identifier": hash(f"offer-{record_id}-{event_start}-{event_end}"),
             "name": record["title"],
             "period": {
+                "tz": TZ,
                 "start": event_start,
                 "end": event_end,
                 "all_day": True,
             },
             "location": {
                 "type": "Location",
-                "client_id": location["client_id"],
+                "identifier": location["identifier"],
             },
             "item": {
                 "type": "Item",
-                "client_id": item["client_id"],
+                "identifier": item["identifier"],
             },
         }
         self.add(offer)
 
     def add(self, item):
-        client_id = item["client_id"]
-        if client_id in self.d:
+        identifier = item["identifier"]
+        if identifier in self.d:
             return
 
-        self.dorder.append(client_id)
-        self.d[client_id] = denull(item)
+        self.dorder.append(identifier)
+        self.d[identifier] = denull(item)
 
 if __name__ == '__main__':
-    p = Processor()
+    parser = argparse.ArgumentParser(description='parse event data')
+    parser.add_argument('--n', help='max number of records', default=None, type=int)
+    args = parser.parse_args()
+
+    p = Processor(n=args.n)
     p.run()
