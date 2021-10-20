@@ -71,6 +71,22 @@ class Processor:
         if self.n is not None:
             records = records[:self.n]
 
+        self.add({
+            "type": "Category",
+            "identifier": "events-general",
+            "names": [
+                "Events"
+            ],
+        })
+        self.add({
+            "type": "Category",
+            "identifier": "events-tourism",
+            "names": [
+                "Events",
+                "Tourism"
+            ],
+        })
+
         for record in records:
             self.cook_one(record)
 
@@ -101,6 +117,16 @@ class Processor:
             "email": record.get("email"),
             "phone": record.get("phone"),
             "images": images or None,
+            "categories": [
+                {
+                    "type": "Category",
+                    "identifier": "event-general",
+                },
+                {
+                    "type": "Category",
+                    "identifier": "event-tourism",
+                },
+            ],
         }
         self.add(item)
 
