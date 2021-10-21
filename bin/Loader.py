@@ -6,10 +6,30 @@ import hashlib
 import base64
 import datetime
 import argparse
+import ulid
 
 import yaml
 
 __folder__ = os.path.dirname(__file__)
+
+class API:
+    def __init__(self):
+        self.d = {}
+
+    def ObjectEnsure(self, in_record):
+        in_identifier = in_record["identifier"]
+        ex_record = self.d.get(in_identifier)
+        if not ex_record:
+            ex_record = dict(in_record)
+            ex_record["id"] = str(ulid.ULID())
+            self.d[in_identifier] = ex_record
+
+        return {
+            "object": ex_record,
+        }
+
+
+api = API()
 
 class Loader:
     def __init__(self, destination, filename):
@@ -25,39 +45,46 @@ class Loader:
         }
 
     def run(self):
-        self._load_existing()
-        self._load_new()
-        self._load_new()
-
-    def _load_existing(self):
+        ## existing records
         try:
             with open(self.filename_db, "rb") as fin:
                 self.db = yaml.safe_load(fin)
         except IOError:
             pass
 
-    def _load_new(self):
+        ex_records = self.db["records"]
+        ex_recordd = {}
+        for ex_record in ex_records:
+            ex_recordd[ex_record["identifier"]] = ex_record
+
+        ex_identifiers = set([ record["identifier"] for record in ex_records ])
+
+        ## new records
         with open(self.filename_in, "rb") as fin:
-            records = yaml.safe_load(fin)
-            for record in records:
-                try: del record["id"]
+            in_records = yaml.safe_load(fin)
+            for in_record in in_records:
+                try: del in_record["id"]
                 except KeyError: pass
 
-        old_identifiers = set([ record["identifier"] for record in self.db["records"] ])
-        new_identifiers = set([ record["identifier"] for record in records ])
+        in_identifiers = set([ record["identifier"] for record in in_records ])
 
-        del_identifiers = old_identifiers - new_identifiers
-        print("deleted", del_identifiers)
+        ## update the database
+        ## with onamap.actions.api() as api:
+        if True:
+            for in_record in in_records:
+                in_identifier = in_record["identifier"]
 
-    def _process(self):
-        for record in self.db["records"]:
-            if "id" in record:
-                continue
+                ex_record = ex_recordd.get(in_identifier)
+                if ex_record:
+                    in_record["id"] = ex_record["id"]
 
-            actions.dispatch({
-                "action": "Ensure",
-                "subject": "record",
-            })
+                if not ex_record or in_record != ex_record:
+                    response = api.ObjectEnsure(in_record)
+                    response_record = response["object"]
+
+                    in_record["id"] = response_record["id"]
+
+        pprint.pprint(api.d)
 
 
 if __name__ == '__main__':
