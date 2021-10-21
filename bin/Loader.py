@@ -18,6 +18,8 @@ class API:
 
     def ObjectEnsure(self, in_record):
         in_identifier = in_record["identifier"]
+        del in_record["identifier"]
+
         ex_record = self.d.get(in_identifier)
         if not ex_record:
             ex_record = dict(in_record)
@@ -66,25 +68,57 @@ class Loader:
                 try: del in_record["id"]
                 except KeyError: pass
 
+        in_records = in_records
         in_identifiers = set([ record["identifier"] for record in in_records ])
+
+        def cook(d, depth=0):
+            if isinstance(d, dict):
+                ## print("COOK", d)
+
+                identifier = d.get("identifier")
+                if identifier:
+                    ex_record = ex_recordd.get(identifier)
+                    if depth and not ex_record:
+                        pprint.pprint(("XXX", identifier, ex_recordd, ex_record))
+                        print("FAILED", d)
+                        sys.exit(1)
+                        
+                    
+                    if ex_record:
+                        d["id"] = ex_record["id"]
+                        del d["identifier"]
+
+                for key, value in d.items():
+                    cook(value, depth=depth+1)
+            elif isinstance(d, list):
+                for value in d:
+                    cook(value, depth=depth+1)
 
         ## update the database
         ## with onamap.actions.api() as api:
         if True:
             for in_record in in_records:
+                print("---")
                 in_identifier = in_record["identifier"]
 
                 ex_record = ex_recordd.get(in_identifier)
+                ## print("lookup", in_identifier, (ex_record or {}).get("id"))
                 if ex_record:
                     in_record["id"] = ex_record["id"]
 
                 if not ex_record or in_record != ex_record:
+                    cook(in_record)
+
                     response = api.ObjectEnsure(in_record)
                     response_record = response["object"]
+                    ## print("RR", response_record)
 
                     in_record["id"] = response_record["id"]
+                    ex_recordd[in_identifier] = response_record
 
-        pprint.pprint(api.d)
+                    pprint.pprint(response_record)
+
+        ## pprint.pprint(api.d)
 
 
 if __name__ == '__main__':

@@ -120,11 +120,11 @@ class Processor:
             "categories": [
                 {
                     "type": "Category",
-                    "identifier": "event-general",
+                    "identifier": "events-general",
                 },
                 {
                     "type": "Category",
-                    "identifier": "event-tourism",
+                    "identifier": "events-tourism",
                 },
             ],
         }
