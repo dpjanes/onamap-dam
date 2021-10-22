@@ -1,3 +1,13 @@
+#
+#   bin/Loader.py
+#
+#   David Janes
+#   Onamap
+#   2021-10-20
+#
+#   Load a Destination's data into the servers
+#
+
 import os
 import re
 import sys
@@ -17,6 +27,7 @@ class API:
         self.d = {}
 
     def ObjectEnsure(self, in_record):
+        ## in the real API, this won't exist!
         in_identifier = in_record["identifier"]
         del in_record["identifier"]
 
