@@ -17,8 +17,8 @@ import base64
 import datetime
 import argparse
 import ulid
-
 import yaml
+
 
 __folder__ = os.path.dirname(__file__)
 
@@ -138,6 +138,15 @@ if __name__ == '__main__':
     parser.add_argument('filename', help='file to load')
     args = parser.parse_args()
 
+    sys.path.insert(0, ".")
+    sys.path.insert(0, os.path.expanduser("~/onamap"))
+
+    onamap = __import__('onamap-server')
+    print(dir(onamap))
+    print(onamap.__file__)
+
+    """
     p = Loader(destination=args.destination, filename=args.filename)
     p.run()
+    """
 
