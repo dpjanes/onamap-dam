@@ -42,11 +42,12 @@ class API:
         }
 
 
-api = API()
 
 class Loader:
-    def __init__(self, destination, filename):
+    def __init__(self, destination, filename, api):
         self.filename_in = filename
+        self.api = api
+        self.api = API()
 
         self.folder_db = os.path.expanduser(f"~/.onamap/dam/{destination}")
         if not os.path.isdir(self.folder_db):
@@ -120,7 +121,7 @@ class Loader:
                 if not ex_record or in_record != ex_record:
                     cook(in_record)
 
-                    response = api.ObjectEnsure(in_record)
+                    response = self.api.ObjectEnsure(in_record)
                     response_record = response["object"]
                     ## print("RR", response_record)
 
@@ -133,20 +134,25 @@ class Loader:
 
 
 if __name__ == '__main__':
+    import oms_context
+    import oms_api
+
     parser = argparse.ArgumentParser(description='load event data')
     parser.add_argument('--destination', help='name of destination', required=True)
     parser.add_argument('filename', help='file to load')
     args = parser.parse_args()
 
-    sys.path.insert(0, ".")
-    sys.path.insert(0, os.path.expanduser("~/onamap"))
+    context = oms_context.Context(settings={
+        "database": {
+            "engine": "memory",
+            "connection": os.path.join(os.path.dirname(__file__), ".memory"),
+        },
+        "media": {
+            "folder": os.path.join(os.path.dirname(__file__), ".memory.media"),
+        },
+    })
+    api = oms_api.API(context=context)
 
-    onamap = __import__('onamap-server')
-    print(dir(onamap))
-    print(onamap.__file__)
-
-    """
-    p = Loader(destination=args.destination, filename=args.filename)
+    p = Loader(destination=args.destination, filename=args.filename, api=api)
     p.run()
-    """
 

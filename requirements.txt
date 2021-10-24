@@ -4,3 +4,5 @@ geopy
 peewee
 markdownify
 pytz
+jsonschema
+Pillow
