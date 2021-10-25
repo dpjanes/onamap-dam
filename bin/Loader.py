@@ -19,7 +19,6 @@ import argparse
 import ulid
 import yaml
 
-
 __folder__ = os.path.dirname(__file__)
 
 class API:
@@ -37,17 +36,13 @@ class API:
             ex_record["id"] = str(ulid.ULID())
             self.d[in_identifier] = ex_record
 
-        return {
-            "object": ex_record,
-        }
-
-
+        return ex_record
 
 class Loader:
     def __init__(self, destination, filename, api):
         self.filename_in = filename
         self.api = api
-        self.api = API()
+        ## self.api = API()
 
         self.folder_db = os.path.expanduser(f"~/.onamap/dam/{destination}")
         if not os.path.isdir(self.folder_db):
@@ -95,7 +90,6 @@ class Loader:
                         print("FAILED", d)
                         sys.exit(1)
                         
-                    
                     if ex_record:
                         d["id"] = ex_record["id"]
                         del d["identifier"]
@@ -107,8 +101,7 @@ class Loader:
                     cook(value, depth=depth+1)
 
         ## update the database
-        ## with onamap.actions.api() as api:
-        if True:
+        with self.api as api:
             for in_record in in_records:
                 print("---")
                 in_identifier = in_record["identifier"]
@@ -121,9 +114,7 @@ class Loader:
                 if not ex_record or in_record != ex_record:
                     cook(in_record)
 
-                    response = self.api.ObjectEnsure(in_record)
-                    response_record = response["object"]
-                    ## print("RR", response_record)
+                    response_record = self.api.ObjectEnsure(in_record)
 
                     in_record["id"] = response_record["id"]
                     ex_recordd[in_identifier] = response_record
