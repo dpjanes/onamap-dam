@@ -11,6 +11,11 @@ import pytz
 import yaml
 from markdownify import markdownify
 
+import logging
+logger = logging.getLogger(__name__)
+
+import oms_helpers
+
 __folder__ = os.path.dirname(__file__)
 
 TZ = "America/Halifax"
@@ -58,11 +63,14 @@ def scrub_content(text):
     return text
 
 class Processor:
-    def __init__(self, n=None):
+    def __init__(self, n=None, context=None, cache=None):
         self.folder = os.path.join(__folder__, "pyd")
         self.dorder = []
         self.d = {}
         self.n = n
+
+        self.context = context
+        self.cache = cache
 
     def run(self):
         with open(os.path.join(self.folder, "pei.search.events.pyd")) as fin:
@@ -93,15 +101,26 @@ class Processor:
         yaml.dump([ self.d[identifier] for identifier in self.dorder ], sys.stdout)
 
     def cook_one(self, record):
+        L = "cook_one"
+
         record_id = record["id"]
 
         images = []
         for photo in record.get("photos", []):
-            image = {
+            ## add to cache, but don't actually keep data
+            try:
+                image = oms_helpers.load_url(photo, cache=self.cache)
+            except:
+                logger.exception(f"{L}: photo url could not be loaded: {photo}")
+                continue
+
+            image = {}
+            image.update({
                 "type": "Image",
                 "identifier": hash(photo),
                 "url": photo,
-            }
+            })
+
             self.add(image)
             images.append({
                 "type": "Image",
@@ -174,9 +193,28 @@ class Processor:
         self.d[identifier] = denull(item)
 
 if __name__ == '__main__':
+    import oms_helpers
+
     parser = argparse.ArgumentParser(description='parse event data')
     parser.add_argument('--n', help='max number of records', default=None, type=int)
+    parser.add_argument("--config", help="configuration file", default=oms_helpers.DEFAULT_CONFIG)
+    parser.add_argument("--debug", help="show debugging", action="store_true")
     args = parser.parse_args()
 
-    p = Processor(n=args.n)
+    if args.debug:
+        logging.basicConfig(level=logging.DEBUG)
+    else:
+        logging.basicConfig(level=logging.INFO)
+
+    import oms_context
+    import oms_actions
+
+    context = oms_context.Context(config=args.config)
+    args = parser.parse_args()
+
+    p = Processor(
+        n=args.n,
+        context=context,
+        cache=context.get("media.cache", expanduser=True),
+    )
     p.run()

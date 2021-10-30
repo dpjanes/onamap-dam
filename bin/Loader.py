@@ -34,6 +34,8 @@ class Loader:
         if not os.path.isdir(self.folder_db):
             os.makedirs(self.folder_db)
 
+        self.cache = context.get("media.cache", expanduser=True)
+
         self.filename_db = os.path.join(self.folder_db, "events.yaml")
         self.db = {
             "records": [],
@@ -102,7 +104,7 @@ class Loader:
                 cook(in_record)
 
                 if (in_record["type"] == "Image") and ("url" in in_record) and ("data" not in in_record):
-                    image = oms_helpers.load_image(in_record["url"], cache="./image-cache")
+                    image = oms_helpers.load_url(in_record["url"], cache=self.cache)
                     in_record.update(image)
 
                 response = oms_actions.ObjectEnsure(self.context, self.user, in_record)
@@ -145,6 +147,11 @@ if __name__ == '__main__':
     if not user:
         raise ValueError(f"no user has been created for destination={args.destination}")
 
-    p = Loader(destination=args.destination, filename=args.filename, context=context, user=user)
+    p = Loader(
+        destination=args.destination, 
+        filename=args.filename, 
+        context=context, 
+        user=user,
+    )
     p.run()
 
