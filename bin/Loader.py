@@ -101,6 +101,10 @@ class Loader:
             if not ex_record or in_record != ex_record:
                 cook(in_record)
 
+                if (in_record["type"] == "Image") and ("url" in in_record) and ("data" not in in_record):
+                    image = oms_helpers.load_image(in_record["url"], cache="./image-cache")
+                    in_record.update(image)
+
                 response = oms_actions.ObjectEnsure(self.context, self.user, in_record)
                 response_record = response["object"]
                 pprint.pprint(response_record)
