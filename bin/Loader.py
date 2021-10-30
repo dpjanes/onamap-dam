@@ -19,30 +19,16 @@ import argparse
 import ulid
 import yaml
 
+import logging
+logger = logging.getLogger(__name__)
+
 __folder__ = os.path.dirname(__file__)
 
-class API:
-    def __init__(self):
-        self.d = {}
-
-    def ObjectEnsure(self, in_record):
-        ## in the real API, this won't exist!
-        in_identifier = in_record["identifier"]
-        del in_record["identifier"]
-
-        ex_record = self.d.get(in_identifier)
-        if not ex_record:
-            ex_record = dict(in_record)
-            ex_record["id"] = str(ulid.ULID())
-            self.d[in_identifier] = ex_record
-
-        return ex_record
-
 class Loader:
-    def __init__(self, destination, filename, api):
+    def __init__(self, destination, filename, context, user):
         self.filename_in = filename
-        self.api = api
-        ## self.api = API()
+        self.context = context
+        self.user = user
 
         self.folder_db = os.path.expanduser(f"~/.onamap/dam/{destination}")
         if not os.path.isdir(self.folder_db):
@@ -54,6 +40,8 @@ class Loader:
         }
 
     def run(self):
+        import oms_actions
+
         ## existing records
         try:
             with open(self.filename_db, "rb") as fin:
@@ -101,49 +89,58 @@ class Loader:
                     cook(value, depth=depth+1)
 
         ## update the database
-        with self.api as api:
-            for in_record in in_records:
-                print("---")
-                in_identifier = in_record["identifier"]
+        for in_record in in_records:
+            print("---")
+            in_identifier = in_record["identifier"]
 
-                ex_record = ex_recordd.get(in_identifier)
-                ## print("lookup", in_identifier, (ex_record or {}).get("id"))
-                if ex_record:
-                    in_record["id"] = ex_record["id"]
+            ex_record = ex_recordd.get(in_identifier)
+            ## print("lookup", in_identifier, (ex_record or {}).get("id"))
+            if ex_record:
+                in_record["id"] = ex_record["id"]
 
-                if not ex_record or in_record != ex_record:
-                    cook(in_record)
+            if not ex_record or in_record != ex_record:
+                cook(in_record)
 
-                    response_record = self.api.ObjectEnsure(in_record)
+                response = oms_actions.ObjectEnsure(self.context, self.user, in_record)
+                response_record = response["object"]
+                pprint.pprint(response_record)
 
-                    in_record["id"] = response_record["id"]
-                    ex_recordd[in_identifier] = response_record
+                in_record["id"] = response_record["id"]
+                ex_recordd[in_identifier] = response_record
 
-                    pprint.pprint(response_record)
 
         ## pprint.pprint(api.d)
 
 
 if __name__ == '__main__':
-    import oms_context
-    import oms_api
+    import oms_helpers
 
     parser = argparse.ArgumentParser(description='load event data')
     parser.add_argument('--destination', help='name of destination', required=True)
+    parser.add_argument("--config", help="configuration file", default=oms_helpers.DEFAULT_CONFIG)
+    parser.add_argument("--debug", help="show debugging", action="store_true")
     parser.add_argument('filename', help='file to load')
     args = parser.parse_args()
 
-    context = oms_context.Context(settings={
-        "database": {
-            "engine": "memory",
-            "connection": os.path.join(os.path.dirname(__file__), ".memory"),
-        },
-        "media": {
-            "folder": os.path.join(os.path.dirname(__file__), ".memory.media"),
-        },
-    })
-    api = oms_api.API(context=context)
+    if args.debug:
+        logging.basicConfig(level=logging.DEBUG)
+    else:
+        logging.basicConfig(level=logging.INFO)
 
-    p = Loader(destination=args.destination, filename=args.filename, api=api)
+    import oms_context
+    import oms_actions
+
+    context = oms_context.Context(config=args.config)
+
+    result = oms_actions.UserGet(context, user=None, subject={
+        "type": "Provider",
+        "provider": "account",
+        "provider_code": args.destination,
+    })
+    user = result["object"]
+    if not user:
+        raise ValueError(f"no user has been created for destination={args.destination}")
+
+    p = Loader(destination=args.destination, filename=args.filename, context=context, user=user)
     p.run()
 
