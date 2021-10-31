@@ -41,22 +41,33 @@ class Loader:
             "records": [],
         }
 
+    def _cook(self, d, depth=0):
+        ## print("COOK", d)
+        if isinstance(d, dict):
+            identifier = d.get("identifier")
+            if identifier:
+                ex_record = self.ex_recordd.get(identifier)
+                if depth and not ex_record:
+                    pprint.pprint(("XXX", identifier, self.ex_recordd, ex_record))
+                    print("FAILED", d)
+                    sys.exit(1)
+                    
+                if ex_record:
+                    d["id"] = ex_record["id"]
+                    del d["identifier"]
+
+            for key, value in d.items():
+                self._cook(value, depth=depth+1)
+        elif isinstance(d, list):
+            for value in d:
+                self._cook(value, depth=depth+1)
+
     def run(self):
+        L = "Loader.run"
+
         import oms_actions
 
-        ## existing records
-        try:
-            with open(self.filename_db, "rb") as fin:
-                self.db = yaml.safe_load(fin)
-        except IOError:
-            pass
-
-        ex_records = self.db["records"]
-        ex_recordd = {}
-        for ex_record in ex_records:
-            ex_recordd[ex_record["identifier"]] = ex_record
-
-        ex_identifiers = set([ record["identifier"] for record in ex_records ])
+        self.db_start()
 
         ## new records
         with open(self.filename_in, "rb") as fin:
@@ -68,55 +79,75 @@ class Loader:
         in_records = in_records
         in_identifiers = set([ record["identifier"] for record in in_records ])
 
-        def cook(d, depth=0):
-            if isinstance(d, dict):
-                ## print("COOK", d)
-
-                identifier = d.get("identifier")
-                if identifier:
-                    ex_record = ex_recordd.get(identifier)
-                    if depth and not ex_record:
-                        pprint.pprint(("XXX", identifier, ex_recordd, ex_record))
-                        print("FAILED", d)
-                        sys.exit(1)
-                        
-                    if ex_record:
-                        d["id"] = ex_record["id"]
-                        del d["identifier"]
-
-                for key, value in d.items():
-                    cook(value, depth=depth+1)
-            elif isinstance(d, list):
-                for value in d:
-                    cook(value, depth=depth+1)
-
         ## update the database
         for in_record in in_records:
             print("---")
             in_identifier = in_record["identifier"]
 
-            ex_record = ex_recordd.get(in_identifier)
-            ## print("lookup", in_identifier, (ex_record or {}).get("id"))
+            ex_record = self.ex_recordd.get(in_identifier)
             if ex_record:
                 in_record["id"] = ex_record["id"]
 
-            if not ex_record or in_record != ex_record:
-                cook(in_record)
+            if ex_record and ex_record == in_record:
+                print(f"{L}: unchanged: {in_record['id']}")
+                continue
 
-                if (in_record["type"] == "Image") and ("url" in in_record) and ("data" not in in_record):
-                    image = oms_helpers.load_url(in_record["url"], cache=self.cache)
-                    in_record.update(image)
+            if ex_record:
+                print(f"{L}: changed: {in_record['id']}")
+                print(ex_record)
+                print(in_record)
+                sys.exit(1)
+            else:
+                print(f"{L}: new")
 
-                response = oms_actions.ObjectEnsure(self.context, self.user, in_record)
-                response_record = response["object"]
-                pprint.pprint(response_record)
+            self._cook(in_record)
 
-                in_record["id"] = response_record["id"]
-                ex_recordd[in_identifier] = response_record
+            deletes = []
+            if (in_record["type"] == "Image") and ("url" in in_record) and ("data" not in in_record):
+                image = oms_helpers.load_url(in_record["url"], cache=self.cache)
+                if image and "data" in image:
+                    in_record["data"] = image["data"]
+                    deletes.append("data")
 
+            ## pprint.pprint(in_record)
+            response = oms_actions.ObjectEnsure(self.context, self.user, in_record)
+            response_record = response["object"]
+            ## pprint.pprint(response_record)
+
+            for key in deletes:
+                try: del in_record[key]
+                except KeyError: pass
+
+            in_record["id"] = response_record["id"]
+            self.ex_recordd[in_identifier] = response_record
 
         ## pprint.pprint(api.d)
+        self.db["records"] = in_records
 
+        self.db_end()
+
+    def db_start(self):
+        ## existing records
+        try:
+            with open(self.filename_db, "rb") as fin:
+                self.db = yaml.safe_load(fin)
+        except IOError:
+            pass
+
+        self.db = self.db or {}
+        self.db.setdefault("records", [])
+
+        self.ex_records = self.db["records"]
+        self.ex_recordd = {}
+        for ex_record in self.ex_records:
+            self.ex_recordd[ex_record["identifier"]] = ex_record
+
+        self.ex_identifiers = set([ record["identifier"] for record in self.ex_records ])
+
+    def db_end(self):
+        ## save
+        with open(self.filename_db, "w") as fout:
+            yaml.dump(self.db, fout)
 
 if __name__ == '__main__':
     import oms_helpers
